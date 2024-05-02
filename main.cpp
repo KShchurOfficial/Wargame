@@ -34,7 +34,16 @@ int main()
 			system("cls");
 			cout << pool[turn]->show_name() << "'s turn." << endl;
 			battlefield.draw();
+			pool[turn]->search_alive();
+			if (pool[turn]->is_defeat())
+			{
+				game_over = true;
+				cout << pool[turn]->show_name() << " lost the game!" << endl;
+				break;
+			}
+
 			pool[turn]->choose_action(i);
+
 			if (pool[turn]->is_defeat())
 			{
 				game_over = true;

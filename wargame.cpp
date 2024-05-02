@@ -20,6 +20,7 @@ player::player(int number)
 		name = "Player " + std::to_string(number);
 	ord_num = number;
 
+	army = new division * [armysize];
 	for (int i = 0; i < armysize; i++)
 	{
 		army[i] = nullptr;
@@ -39,6 +40,7 @@ player::~player()
 	{
 		delete army[i];
 	}
+	delete[] army;
 	delete[] enemies;
 }
 
@@ -135,16 +137,37 @@ void player::check_other(division* checking)
 	return;
 }
 
-division* player::search_by_pos(int srchx, int srchy)
+bool player::is_defeat()
+{
+	return defeat;
+}
+
+void player::search_alive()
+{
+	defeat = true;
+	for (int i = 0; i < armysize; i++)
+	{
+		if (!army[i]->defeated)
+		{
+			defeat = false;
+			break;
+		}
+	}
+}
+
+division* player::search_by_pos(int& srch_x, int& srch_y)
 {
 	bool found = false;
 	for (int i = 0; i < armysize; i++)
 	{
 		chosen = army[i];
-		if (chosen->pos.x == srchx && chosen->pos.y == srchy)
+		if (chosen->pos.x == srch_x && chosen->pos.y == srch_y)
 		{
-			found = true;
-			break;
+			if (!chosen->defeated)
+			{
+				found = true;
+				break;
+			}
 		}
 	}
 
@@ -197,21 +220,19 @@ void player::choose_action(int& step)
 		case 1:
 		{
 			bool denial = false;
-			int inp_x = 0,
-				inp_y = 0;
+			division::position input;
 			chosen = nullptr;
 			while (!chosen)
 			{
-				if (!get_coord(chosen->pos, *location))
+				if (!get_coord(input, *location))
 				{
 					denial = true;
 					step--;
 					break;
 				}
-
 				try
 				{
-					chosen = search_by_pos(inp_x, inp_y);
+					chosen = search_by_pos(input.x, input.y);
 				}
 				catch (err& trouble)
 				{
@@ -226,6 +247,7 @@ void player::choose_action(int& step)
 				chosen->killzone_comp(*location);
 				chosen->refresh_EL();
 				chosen->update_EL(enemies, enemies_amt);
+				cin.get();
 			}
 
 			break;
@@ -262,12 +284,11 @@ void player::choose_action(int& step)
 		}
 		case 1:
 		{
-			int inp_x = 0,
-				inp_y = 0;
+			division::position inp;
 
 			while (true)
 			{
-				if (!get_coord(chosen->pos, *location))
+				if (!get_coord(inp, *location))
 				{
 					step--;
 					break;
@@ -275,11 +296,11 @@ void player::choose_action(int& step)
 
 				try
 				{
-					chosen->move(*location, inp_x, inp_y);
+					chosen->move(*location, inp.x, inp.y);
 				}
-				catch (err& trouble)
+				catch (err& place_not_free)
 				{
-					cout << " Error: " << trouble.what() << endl;
+					cout << " Error: " << place_not_free.what() << endl;
 					cout << " Try again." << endl;
 					std::cin.get();
 					continue;
@@ -366,6 +387,8 @@ division::division(bool which_side)
 	defeated = false;
 	health = 100.0;
 	aver_dmg = 20.0;
+	crit_chance = 20.0;
+	precise = 90.0;
 	attack_range = 2;
 	move_range = 3;
 }
@@ -380,7 +403,7 @@ void division::move(map& pg, int destX, int destY)
 {
 	if (pg.playground[destY][destX] != ' ')
 	{
-		throw(err("Cannot move division on this cell!"));
+		throw(player::err("Cannot move division on this cell!"));
 	}
 	else if (destX < move_limits[0].x || destX > move_limits[1].x || destY < move_limits[0].y || destY > move_limits[1].y)
 	{
@@ -410,12 +433,14 @@ void division::refresh_EL()
 	{
 		current = &enemy_list[i];
 		if (current->pos.x < kill_zone[0].x || current->pos.y < kill_zone[0].y ||
-			current->pos.x > kill_zone[1].x || current->pos.y > kill_zone[1].y)
+			current->pos.x > kill_zone[1].x || current->pos.y > kill_zone[1].y ||
+			current->defeated)
 		{
 			enemy_list.rm_elem(current);
-			i--;
+			i = -1;
 		}
 	}
+	std::cin.get();
 	return;
 }
 
@@ -430,7 +455,8 @@ void division::update_EL(player** enemies, int enemies_amt)
 		for (int j = 0; j < enemies[i]->armysize; j++)
 		{
 			if (enemies[i]->army[j]->pos.x >= kill_zone[0].x && enemies[i]->army[j]->pos.y >= kill_zone[0].y &&
-				enemies[i]->army[j]->pos.x <= kill_zone[1].x && enemies[i]->army[j]->pos.y <= kill_zone[1].y)
+				enemies[i]->army[j]->pos.x <= kill_zone[1].x && enemies[i]->army[j]->pos.y <= kill_zone[1].y &&
+				!enemies[i]->army[j]->defeated)
 			{
 				for (int k = 0; k < enemy_list.size; k++)
 				{
@@ -461,6 +487,12 @@ void division::attack(int victim_number, map& loc)
 	using std::cin;
 	using std::endl;
 	int damage = aver_dmg * 0.9 + rand() % int(aver_dmg * 0.2 + 1);
+	int _event = 1 + rand() % 100;
+	if (_event <= precise)
+		_event = 1 + rand() % 100;
+	else
+		damage = 0;
+
 	division* target = nullptr;
 
 	try
@@ -472,8 +504,17 @@ void division::attack(int victim_number, map& loc)
 		throw (std::range_error(trouble.what()));
 	}
 
+	if (_event <= crit_chance)
+	{
+		damage *= 1.5;
+		cout << " Critical damage!" << endl;
+	}
+	else if (!damage)
+		cout << " Miss!" << endl;
+	else
+		cout << " Enemy is hit!" << endl;
+
 	target->health -= damage;
-	cout << " Enemy is hit!" << endl;
 	cin.get();
 
 	if (target->health <= 0)
@@ -481,6 +522,8 @@ void division::attack(int victim_number, map& loc)
 		target->health = 0;
 		target->defeated = true;
 		loc.playground[target->pos.y][target->pos.x] = ' ';
+		target->pos.x = -1;  // Система управления дивизиями игрока должна быть переделана 
+		target->pos.y = -1;  // на манер системы со списком целей для атаки.
 		cout << " Enemy destroyed!" << endl;
 		cin.get();
 	}
@@ -681,7 +724,16 @@ void division::list::rm_elem(division* which)
 		}
 
 		if (to_rm == head)
-			head = nullptr;
+		{
+			if (head->next != nullptr)
+			{
+				head = head->next;
+			}
+			else
+			{
+				head = nullptr;
+			}
+		}
 
 		delete to_rm;
 		size--;

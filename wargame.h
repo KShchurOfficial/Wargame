@@ -8,8 +8,6 @@ class player;
 class map;
 class division;
 
-
-
 class player
 {
 private:
@@ -19,15 +17,15 @@ private:
 	class err
 	{
 	private:
-		const char* reason;
+		std::string reason;
 	public:
-		err(const char* what = "something went wrong") : reason(what) {};
+		err(std::string what = "something went wrong") : reason(what) {};
 		~err() {};
-		const char* what() { return reason; }
+		std::string what() { return reason; }
 	};
 
 	enum { armysize = 5 };
-	division* army[armysize];
+	division** army;
 	int ord_num;
 	std::string name;
 	player** enemies;
@@ -45,14 +43,14 @@ public:
 
 	void placement(map& visual);
 	std::string& show_name() { return name; }
-	division* search_by_pos(int srchx, int srchy);
+	division* search_by_pos(int& srch_x, int& srch_y);
 	void set_location(map* addr) { location = addr; }
 	void set_EL(player** pool, int poolsize);
 	void choose_action(int& step);
 	void check_other(division* checking);
-	bool is_defeat() { return defeat; };
+	bool is_defeat();
+	void search_alive();
 };
-
 
 
 class division
@@ -60,17 +58,6 @@ class division
 private:
 	friend map;
 	friend player;
-
-	class err
-	{
-	private:
-		const char* reason;
-	public:
-		err(const char* what = "something went wrong") : reason(what) {};
-		~err() {};
-		const char* what() { return reason; }
-	};
-
 
 	class list
 	{
@@ -100,7 +87,6 @@ private:
 		friend std::ostream& operator<<(std::ostream& out, list& obj);
 	};
 
-
 	struct position
 	{
 		int x;
@@ -117,6 +103,8 @@ private:
 
 	double health;
 	double aver_dmg;
+	double crit_chance;
+	double precise;
 	int attack_range;
 	int move_range;
 
