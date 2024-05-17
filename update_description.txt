@@ -1,0 +1,7 @@
+-!--!--!--!- Update 1.0.1 -!--!--!--!-
+
+1) System of division choosing has improved.
+2) Game settings have added. Now user can set size of battlefield and amount of players (from 2 to 4).
+3) Prototype of economics has added. Now each player receive 1000 coins on the game start.
+These coins player should spend to buy at least one division. Amount of divisions each player can place 
+is limited by their coin amount. At the moment player can grab more coins by destroying enemy divisions.

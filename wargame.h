@@ -3,10 +3,42 @@
 
 #include <climits>
 #include <string>
+#include <iostream>
 
 class player;
 class map;
 class division;
+class list;
+
+class list
+{
+private:
+	friend player;
+	friend division;
+	struct node
+	{
+		division* content;
+		node* next;
+	};
+	node* head;
+	node* tail;
+	node* current;
+	int size;
+
+public:
+	list();
+	list(list& orig);
+	~list();
+	void add_elem(division* which);
+	void rm_elem(division* which);
+	bool is_empty() { if (!size) return true; }
+
+	list& operator=(const list& orig);
+	division* operator[](int index);
+	friend std::ostream& operator<<(std::ostream& out, list& obj);
+};
+
+
 
 class player
 {
@@ -24,24 +56,38 @@ private:
 		std::string what() { return reason; }
 	};
 
-	enum { armysize = 5 };
-	division** army;
+	class income
+	{
+	private:
+		int summ;
+		std::string reason;
+	public:
+		income(std::string what, int amt) : reason(what), summ(amt) {}
+		~income() {};
+		int msg() { std::cout << " Earned " << summ << " coins! (" << reason << ")" << std::endl; return summ; }
+	};
+
 	int ord_num;
 	std::string name;
+	list army;
+	division* chosen;
+
+	map* location;
+
 	player** enemies;
 	int enemies_amt;
-	map* location;
-	division* chosen;
-	int dialog;
 	bool defeat;
 
-	int get_armysize() { return armysize; }
+	int coins;
+
+	int get_armysize() { return army.size; }
 
 public:
 	player(int number);
 	~player();
 
-	void placement(map& visual);
+	void equipment();
+	void placement();
 	std::string& show_name() { return name; }
 	division* search_by_pos(int& srch_x, int& srch_y);
 	void set_location(map* addr) { location = addr; }
@@ -58,34 +104,6 @@ class division
 private:
 	friend map;
 	friend player;
-
-	class list
-	{
-	private:
-		friend player;
-		friend division;
-		struct node
-		{
-			division* content;
-			node* next;
-		};
-		node* head;
-		node* tail;
-		node* current;
-		int size;
-
-	public:
-		list();
-		list(list& orig);
-		~list();
-		void add_elem(division* which);
-		void rm_elem(division* which);
-		bool is_empty() { if (!size) return true; }
-
-		list& operator=(const list& orig);
-		division& operator[](int index);
-		friend std::ostream& operator<<(std::ostream& out, list& obj);
-	};
 
 	struct position
 	{
@@ -108,6 +126,9 @@ private:
 	int attack_range;
 	int move_range;
 
+	int price;
+
+	void place_division(bool which_side, map& loc);
 	void reach_area_comp(map& pg);
 	void move(map& pg, int destX, int destY);
 	void killzone_comp(map& pg);
@@ -117,7 +138,7 @@ private:
 	void short_info();
 
 public:
-	division(bool which_side);
+	division();
 	~division() {}
 
 	friend std::ostream& operator<<(std::ostream& out, list& obj);
@@ -134,12 +155,21 @@ private:
 	friend player;
 	friend division;
 
-	enum { length = 10, width = 10 };
+	enum { minlength = 10, minwidth = 10 };
+	int length;
+	int width;
+	int playernum;
 	char** playground;
 
+	void set_width(int w_init, int playernum = 2);
+	void set_length(int l_init, int playernum = 2);
+
 public:
-	map();
+	map(int w_init = minwidth, int l_init = minlength, int p_amt = 2);
 	~map();
+	void settings();
+	void init();
+	int get_playernum() { return playernum; }
 	void save_div(division* div);
 	void update(const player& contestant);
 	void draw();
@@ -147,7 +177,6 @@ public:
 	friend void calc_zone(division::position& current, division::position& lcorner, division::position& rcorner, map& loc, int range);
 	friend bool get_coord(division::position& inp, map& loc);
 };
-
 
 int get_with_lim(int bottom = INT_MIN, int top = INT_MAX);
 int get_int();

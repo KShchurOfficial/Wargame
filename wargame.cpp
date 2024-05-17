@@ -20,31 +20,80 @@ player::player(int number)
 		name = "Player " + std::to_string(number);
 	ord_num = number;
 
-	army = new division * [armysize];
-	for (int i = 0; i < armysize; i++)
-	{
-		army[i] = nullptr;
-	}
-
 	chosen = nullptr;
 	defeat = false;
-	dialog = 0;
 	location = nullptr;
 	enemies = nullptr;
 	enemies_amt = 0;
+	coins = 1000;
 }
 
 player::~player()
 {
-	for (int i = 0; i < armysize; i++)
-	{
-		delete army[i];
-	}
-	delete[] army;
 	delete[] enemies;
 }
 
-void player::placement(map& visual)
+void player::equipment()
+{
+	using std::cout;
+	using std::cin;
+	using std::endl;
+
+	bool finish = false;
+	int dialog = 0;
+	division* recruit = nullptr;
+
+	while (!finish)
+	{
+		system("cls");
+		cout << "\"" << name << "\" turn." << endl << endl
+			<< " You have " << coins << " coins." << endl;
+		cout << " Choose the type of equiping division:" << endl
+			<< " #1 Default type division (100 coins)" << endl
+			<< " #0 Finish equipment" << endl
+			<< " Your choice: ";
+		dialog = get_with_lim(0, 1);
+
+		switch (dialog)
+		{
+		case 1:
+		{
+			recruit = new division();
+			if (coins < recruit->price)
+			{
+				delete recruit;
+				cout << " You haven't enough coins to equip division of this type! ";
+			}
+			else
+			{
+				coins -= recruit->price;
+				army.add_elem(recruit);
+				cout << recruit->type << " equiped!" << endl;
+			}
+			break;
+		}
+		case 0:
+		{
+			if (!army.size)
+			{
+				cout << " You should equip at least one division!" << endl;
+			}
+			else
+			{
+				cout << "\"" << name << "\" has formed an army!" << endl;
+				finish = true;
+			}
+			break;
+		}
+		}
+		cin.get();
+	}
+
+	return;
+}
+
+
+void player::placement()
 {
 	using std::cout;
 	using std::cin;
@@ -58,12 +107,12 @@ void player::placement(map& visual)
 	{
 		system("cls");
 		cout << "\"" << name << "\" turn." << endl << endl;
-		visual.draw();
+		location->draw();
 
 		ready = true;
-		for (int i = 0; i < armysize; i++)
+		for (int i = 0; i < army.size; i++)
 		{
-			if (army[i] == nullptr)
+			if (army[i]->pos.x == -1 && army[i]->pos.y == -1)
 			{
 				ready = false;
 				break;
@@ -78,42 +127,44 @@ void player::placement(map& visual)
 		}
 
 		cout << " Need to place: " << endl;
-		for (int i = 0; i < armysize; i++)
+		for (int i = 0; i < army.size; i++)
 		{
-			if (army[i] == nullptr)
+			if (army[i]->pos.x == -1 && army[i]->pos.y == -1)
 				cout << " division #" << i + 1 << endl;
 		}
 		cout << " Enter the number of placing division: ";
-		input = get_with_lim(1, armysize);
+		input = get_with_lim(1, army.size);
 		input--;
 
-		if (army[input] != nullptr)
+		chosen = army[input];
+
+		if (chosen->pos.x != -1 && chosen->pos.y != -1)
 		{
 			cout << " This division was already placed!" << endl;
 		}
 		else
 		{
-			army[input] = new division(ord_num % 2);
+			chosen->place_division(ord_num % 2, *location);
 			try
 			{
-				check_other(army[input]);
+				check_other(chosen);
 			}
 			catch (err& trouble)
 			{
 				cerr << " Error: " << trouble.what() << endl;
-				delete army[input];
-				army[input] = nullptr;
 				cout << " Try again." << endl;
 				cin.get();
 				continue;
 			}
 
-			visual.save_div(army[input]);
+			location->save_div(chosen);
 			cout << " Division placed!" << endl;
+			chosen = nullptr;
 		}
 		cin.get();
 		system("cls");
 	}
+	return;
 }
 
 void player::check_other(division* checking)
@@ -121,7 +172,7 @@ void player::check_other(division* checking)
 	using std::cout;
 	using std::endl;
 
-	for (int i = 0; i < armysize; i++)
+	for (int i = 0; i < army.size; i++)
 	{
 		if (army[i] == checking || army[i] == nullptr)
 		{
@@ -145,20 +196,25 @@ bool player::is_defeat()
 void player::search_alive()
 {
 	defeat = true;
-	for (int i = 0; i < armysize; i++)
+	division* passing = nullptr;
+	for (int i = 0; i < army.size; i++)
 	{
-		if (!army[i]->defeated)
+		passing = army[i];
+		if (passing->defeated)
 		{
-			defeat = false;
-			break;
+			army.rm_elem(passing);
 		}
 	}
+	if (army.size)
+		defeat = false;
+
+	return;
 }
 
 division* player::search_by_pos(int& srch_x, int& srch_y)
 {
 	bool found = false;
-	for (int i = 0; i < armysize; i++)
+	for (int i = 0; i < army.size; i++)
 	{
 		chosen = army[i];
 		if (chosen->pos.x == srch_x && chosen->pos.y == srch_y)
@@ -220,21 +276,28 @@ void player::choose_action(int& step)
 		case 1:
 		{
 			bool denial = false;
-			division::position input;
 			chosen = nullptr;
-			while (!chosen)
+
+			cout << " #0 cancel action" << endl;
+			cout << army << endl;
+			while (chosen == nullptr)
 			{
-				if (!get_coord(input, *location))
+				cout << " Your input: ";
+				dialog = get_with_lim(0, army.size);
+				dialog--;
+				if (dialog < 0)
 				{
 					denial = true;
 					step--;
 					break;
 				}
+
 				try
 				{
-					chosen = search_by_pos(input.x, input.y);
+					chosen = army[dialog];
+					cin.get();
 				}
-				catch (err& trouble)
+				catch (std::range_error& trouble)
 				{
 					cout << " Error: " << trouble.what() << endl
 						<< " Try again. ";
@@ -247,7 +310,6 @@ void player::choose_action(int& step)
 				chosen->killzone_comp(*location);
 				chosen->refresh_EL();
 				chosen->update_EL(enemies, enemies_amt);
-				cin.get();
 			}
 
 			break;
@@ -323,6 +385,7 @@ void player::choose_action(int& step)
 		{
 			while (true)
 			{
+				cout << " Available enemies: " << endl;
 				cout << chosen->enemy_list << endl;
 				if (!chosen->enemy_list.size)
 				{
@@ -345,6 +408,12 @@ void player::choose_action(int& step)
 						cout << " Try again." << endl;
 						continue;
 					}
+					catch (income& money)
+					{
+						cout << "\"" << name << "\" ";
+						coins += money.msg();
+						cin.get();
+					}
 				}
 
 				break;
@@ -363,27 +432,16 @@ void player::choose_action(int& step)
 
 
 
-division::division(bool which_side)
+division::division()
 {
 	using std::cout;
 	using std::cin;
 	using std::endl;
 
-	side = which_side;
-
-	int place_lim = 1;
-	if (side)
-		place_lim = map::length - 1;
-
-	cout << " Enter position X: ";
-	pos.x = get_with_lim(1, map::width);
-	cout << " Enter position Y: ";
-	pos.y = get_with_lim(place_lim, place_lim + 1);
-
-	pos.x--;
-	pos.y--;
-
-	type = "division";
+	side = -1;
+	pos.x = -1;
+	pos.y = -1;
+	type = "default type division";
 	defeated = false;
 	health = 100.0;
 	aver_dmg = 20.0;
@@ -391,6 +449,24 @@ division::division(bool which_side)
 	precise = 90.0;
 	attack_range = 2;
 	move_range = 3;
+	price = 100;
+}
+
+void division::place_division(bool which_side, map& loc)
+{
+	side = which_side;
+	int place_lim = loc.length / 5;
+
+	std::cout << " Enter position X: ";
+	pos.x = get_with_lim(1, loc.width);
+	std::cout << " Enter position Y: ";
+	if (!side)
+		pos.y = get_with_lim(1, place_lim);
+	else
+		pos.y = get_with_lim(loc.length - place_lim + 1, loc.length);
+
+	pos.x--;
+	pos.y--;
 }
 
 void division::reach_area_comp(map& pg)
@@ -431,7 +507,7 @@ void division::refresh_EL()
 	division* current = nullptr;
 	for (int i = 0; i < enemy_list.size; i++)
 	{
-		current = &enemy_list[i];
+		current = enemy_list[i];
 		if (current->pos.x < kill_zone[0].x || current->pos.y < kill_zone[0].y ||
 			current->pos.x > kill_zone[1].x || current->pos.y > kill_zone[1].y ||
 			current->defeated)
@@ -440,7 +516,6 @@ void division::refresh_EL()
 			i = -1;
 		}
 	}
-	std::cin.get();
 	return;
 }
 
@@ -452,7 +527,7 @@ void division::update_EL(player** enemies, int enemies_amt)
 
 	for (int i = 0; i < enemies_amt; i++)
 	{
-		for (int j = 0; j < enemies[i]->armysize; j++)
+		for (int j = 0; j < enemies[i]->army.size; j++)
 		{
 			if (enemies[i]->army[j]->pos.x >= kill_zone[0].x && enemies[i]->army[j]->pos.y >= kill_zone[0].y &&
 				enemies[i]->army[j]->pos.x <= kill_zone[1].x && enemies[i]->army[j]->pos.y <= kill_zone[1].y &&
@@ -460,7 +535,7 @@ void division::update_EL(player** enemies, int enemies_amt)
 			{
 				for (int k = 0; k < enemy_list.size; k++)
 				{
-					current = &enemy_list[k];
+					current = enemy_list[k];
 					if (current == enemies[i]->army[j])
 					{
 						skip = true;
@@ -497,7 +572,7 @@ void division::attack(int victim_number, map& loc)
 
 	try
 	{
-		target = &enemy_list[victim_number];
+		target = enemy_list[victim_number];
 	}
 	catch (std::range_error trouble)
 	{
@@ -526,8 +601,8 @@ void division::attack(int victim_number, map& loc)
 		target->pos.y = -1;  // на манер системы со списком целей для атаки.
 		cout << " Enemy destroyed!" << endl;
 		cin.get();
+		throw(player::income("Enemy division destroyed", 50));
 	}
-
 	return;
 }
 
@@ -562,22 +637,113 @@ std::ostream& operator<<(std::ostream& out, division& div)
 
 
 
-map::map()
+map::map(int w_init, int l_init, int p_amt)
+{
+	playground = nullptr;
+	playernum = p_amt;
+	int mpsize = (playernum + playernum % 2) * 5;
+	if (w_init < mpsize)
+		width = mpsize;
+	else
+		width = w_init;
+
+	if (l_init < mpsize)
+		length = mpsize;
+	else
+		length = l_init;
+}
+
+void map::settings()
+{
+	using std::cout;
+	using std::cin;
+	using std::endl;
+
+	int dialog = 0;
+
+	while (dialog != 4)
+	{
+		system("cls");
+		cout << " Settings." << endl
+			<< " 1) Length: " << length << endl
+			<< " 2) Width: " << width << endl
+			<< " 3) Amount of players: " << playernum << endl
+			<< " 4) Go back to main menu" << endl
+			<< " Your input: ";
+		dialog = get_with_lim(1, 4);
+
+		switch (dialog)
+		{
+		case 1:
+		{
+			cout << " Enter new value (between 10 and 50): ";
+			dialog = get_with_lim(10, 50);
+			set_length(dialog, playernum);
+			break;
+		}
+		case 2:
+		{
+			cout << " Enter new value (between 10 and 50): ";
+			dialog = get_with_lim(10, 50);
+			set_width(dialog, playernum);
+			break;
+		}
+		case 3:
+		{
+			cout << " Enter new value (between 2 and 4): ";
+			playernum = get_with_lim(2, 4);
+			break;
+		}
+		case 4:
+			break;
+		}
+	}
+
+	return;
+}
+
+void map::init()
 {
 	playground = new char* [length];
-	for (int y = 0; y < length; y++)
+	for (int i = 0; i < length; i++)
 	{
-		playground[y] = new char[width];
-		for (int x = 0; x < width; x++)
-			playground[y][x] = ' ';
+		playground[i] = new char[width];
+		for (int k = 0; k < width; k++)
+			playground[i][k] = ' ';
 	}
+	return;
+}
+
+void map::set_width(int w_init, int playernum)
+{
+	int minsize = (playernum + playernum % 2) * 5;
+	if (w_init < minsize)
+		width = minsize;
+	else
+		width = w_init;
+
+	return;
+}
+
+void map::set_length(int l_init, int playernum)
+{
+	int minsize = (playernum + playernum % 2) * 5;
+	if (l_init < minsize)
+		length = minsize;
+	else
+		length = l_init;
+
+	return;
 }
 
 map::~map()
 {
-	for (int y = 0; y < length; y++)
-		delete[] playground[y];
-	delete[] playground;
+	if (playground != nullptr)
+	{
+		for (int y = 0; y < length; y++)
+			delete[] playground[y];
+		delete[] playground;
+	}
 }
 
 void map::save_div(division* div)
@@ -650,7 +816,7 @@ void calc_zone(division::position& current, division::position& lcorner, divisio
 
 
 
-division::list::list()
+list::list()
 {
 	head = nullptr;
 	tail = nullptr;
@@ -658,7 +824,7 @@ division::list::list()
 	size = 0;
 }
 
-division::list::list(list& orig)
+list::list(list& orig)
 {
 	head = new node;
 	head->content = orig.head->content;
@@ -680,7 +846,7 @@ division::list::list(list& orig)
 	current = nullptr;
 }
 
-division::list::~list()
+list::~list()
 {
 	current = head;
 	while (current != nullptr)
@@ -691,7 +857,7 @@ division::list::~list()
 	}
 }
 
-void division::list::add_elem(division* which)
+void list::add_elem(division* which)
 {
 	if (head == nullptr)
 	{
@@ -710,7 +876,7 @@ void division::list::add_elem(division* which)
 	return;
 }
 
-void division::list::rm_elem(division* which)
+void list::rm_elem(division* which)
 {
 	if (size > 0)
 	{
@@ -741,7 +907,7 @@ void division::list::rm_elem(division* which)
 	return;
 }
 
-division& division::list::operator[](int index)
+division* list::operator[](int index)
 {
 	current = head;
 	if (index < size)
@@ -750,13 +916,13 @@ division& division::list::operator[](int index)
 		{
 			current = current->next;
 		}
-		return *(current->content);
+		return current->content;
 	}
 	else
 		throw(std::range_error("index is out of range."));
 }
 
-division::list& division::list::operator=(const list& orig)
+list& list::operator=(const list& orig)
 {
 	if (this != &orig)
 	{
@@ -790,16 +956,14 @@ division::list& division::list::operator=(const list& orig)
 	return *this;
 }
 
-std::ostream& operator<<(std::ostream& out, division::list& obj)
+std::ostream& operator<<(std::ostream& out, list& obj)
 {
 	using std::endl;
-
-	out << " List of available enemies for this division:" << endl;
 	obj.current = obj.head;
 
 	int acc = 1;
 	if (!obj.size)
-		out << " *there are no targets*" << endl;
+		out << " *there are no units*" << endl;
 	else
 	{
 		for (int i = 0; i < obj.size; i++)
