@@ -4,6 +4,8 @@
 #include <Windows.h>
 #include <ctime>
 #include <cstdlib>
+#include <typeinfo>
+
 
 // Class "Player"
 
@@ -18,13 +20,15 @@ player::player(int number)
 	std::getline(cin, name, '\n');
 	if (name == "")
 		name = "Player " + std::to_string(number);
-	ord_num = number;
 
 	chosen = nullptr;
 	defeat = false;
 	location = nullptr;
 	enemies = nullptr;
 	enemies_amt = 0;
+	ready = false;
+	side = 0;
+	wins = 0;
 	coins = 1000;
 }
 
@@ -39,6 +43,7 @@ void player::equipment()
 	using std::cin;
 	using std::endl;
 
+	ready = false;
 	bool finish = false;
 	int dialog = 0;
 	division* recruit = nullptr;
@@ -67,20 +72,19 @@ void player::equipment()
 			else
 			{
 				coins -= recruit->price;
-				army.add_elem(recruit);
+				army.add_elem(&recruit);
 				cout << recruit->type << " equiped!" << endl;
 			}
 			break;
 		}
 		case 0:
 		{
-			if (!army.size)
+			if (army.is_empty())
 			{
 				cout << " You should equip at least one division!" << endl;
 			}
 			else
 			{
-				cout << "\"" << name << "\" has formed an army!" << endl;
 				finish = true;
 			}
 			break;
@@ -100,7 +104,6 @@ void player::placement()
 	using std::cerr;
 	using std::endl;
 
-	bool ready = false;
 	int input = 0;
 
 	while (!ready)
@@ -110,7 +113,7 @@ void player::placement()
 		location->draw();
 
 		ready = true;
-		for (int i = 0; i < army.size; i++)
+		for (int i = 0; i < army.get_size(); i++)
 		{
 			if (army[i]->pos.x == -1 && army[i]->pos.y == -1)
 			{
@@ -118,6 +121,7 @@ void player::placement()
 				break;
 			}
 		}
+
 		if (ready)
 		{
 			cout << " All divisions are placed!" << endl;
@@ -127,13 +131,13 @@ void player::placement()
 		}
 
 		cout << " Need to place: " << endl;
-		for (int i = 0; i < army.size; i++)
+		for (int i = 0; i < army.get_size(); i++)
 		{
 			if (army[i]->pos.x == -1 && army[i]->pos.y == -1)
 				cout << " division #" << i + 1 << endl;
 		}
 		cout << " Enter the number of placing division: ";
-		input = get_with_lim(1, army.size);
+		input = get_with_lim(1, army.get_size());
 		input--;
 
 		chosen = army[input];
@@ -144,7 +148,7 @@ void player::placement()
 		}
 		else
 		{
-			chosen->place_division(ord_num % 2, *location);
+			chosen->place_division(side, *location);
 			try
 			{
 				check_other(chosen);
@@ -153,6 +157,8 @@ void player::placement()
 			{
 				cerr << " Error: " << trouble.what() << endl;
 				cout << " Try again." << endl;
+				chosen->pos.x = -1;
+				chosen->pos.y = -1;
 				cin.get();
 				continue;
 			}
@@ -172,9 +178,9 @@ void player::check_other(division* checking)
 	using std::cout;
 	using std::endl;
 
-	for (int i = 0; i < army.size; i++)
+	for (int i = 0; i < army.get_size(); i++)
 	{
-		if (army[i] == checking || army[i] == nullptr)
+		if (army[i] == checking)
 		{
 			continue;
 		}
@@ -193,19 +199,37 @@ bool player::is_defeat()
 	return defeat;
 }
 
-void player::search_alive()
+void player::refresh()
 {
-	defeat = true;
+	coins = 1000;
+	defeat = false;
+	ready = false;
+
 	division* passing = nullptr;
-	for (int i = 0; i < army.size; i++)
+	for (int i = 0; i < army.get_size(); i++)
 	{
 		passing = army[i];
-		if (passing->defeated)
+		army.rm_elem(&passing);
+	}
+
+	return;
+}
+
+void player::search_alive()
+{
+	using std::cout;
+	using std::endl;
+
+	defeat = true;
+	for (int i = 0; i < army.get_size(); i++)
+	{
+		if (army[i]->defeated)
 		{
-			army.rm_elem(passing);
+			army.rm_elem(i);
+			i--;
 		}
 	}
-	if (army.size)
+	if (army.get_size())
 		defeat = false;
 
 	return;
@@ -214,7 +238,7 @@ void player::search_alive()
 division* player::search_by_pos(int& srch_x, int& srch_y)
 {
 	bool found = false;
-	for (int i = 0; i < army.size; i++)
+	for (int i = 0; i < army.get_size(); i++)
 	{
 		chosen = army[i];
 		if (chosen->pos.x == srch_x && chosen->pos.y == srch_y)
@@ -267,9 +291,10 @@ void player::choose_action(int& step)
 	{
 		cout << endl
 			<< " 1) Choose some division" << endl
-			<< " 2) give up" << endl
+			<< " 2) Equip more divisions" << endl
+			<< " 3) give up" << endl
 			<< " Your choice: ";
-		dialog = get_with_lim(1, 2);
+		dialog = get_with_lim(1, 3);
 
 		switch (dialog)
 		{
@@ -279,11 +304,17 @@ void player::choose_action(int& step)
 			chosen = nullptr;
 
 			cout << " #0 cancel action" << endl;
-			cout << army << endl;
+			for (int i = 0; i < army.get_size(); i++)
+			{
+				cout << " #" << i + 1 << ": ";
+				army[i]->short_info();
+			}
+			cout << endl;
+
 			while (chosen == nullptr)
 			{
 				cout << " Your input: ";
-				dialog = get_with_lim(0, army.size);
+				dialog = get_with_lim(0, army.get_size());
 				dialog--;
 				if (dialog < 0)
 				{
@@ -315,6 +346,13 @@ void player::choose_action(int& step)
 			break;
 		}
 		case 2:
+		{
+			equipment();
+			placement();
+			step = 2;
+			break;
+		}
+		case 3:
 		{
 			cout << " Are you sure?" << endl
 				<< " 0 - no" << endl
@@ -356,9 +394,10 @@ void player::choose_action(int& step)
 					break;
 				}
 
+				int found_drop = 0;
 				try
 				{
-					chosen->move(*location, inp.x, inp.y);
+					found_drop = chosen->move(*location, inp.x, inp.y);
 				}
 				catch (err& place_not_free)
 				{
@@ -374,6 +413,17 @@ void player::choose_action(int& step)
 					std::cin.get();
 					continue;
 				}
+
+				if (found_drop)
+				{
+					crate* found = location->find_crate(inp.x, inp.y);
+					cout << " Got ";
+					found->info();
+					cout << "! " << endl;
+					crate_unboxing(found);
+					location->crates.rm_elem(&found);
+				}
+
 				cout << " Division moved!" << endl;
 				cin.get();
 
@@ -386,8 +436,14 @@ void player::choose_action(int& step)
 			while (true)
 			{
 				cout << " Available enemies: " << endl;
-				cout << chosen->enemy_list << endl;
-				if (!chosen->enemy_list.size)
+				for (int i = 0; i < chosen->enemy_list.get_size(); i++)
+				{
+					cout << " #" << i + 1 << ": ";
+					chosen->enemy_list[i]->short_info();
+				}
+				cout << endl;
+
+				if (!chosen->enemy_list.get_size())
 				{
 					cin.get();
 					step--;
@@ -395,7 +451,7 @@ void player::choose_action(int& step)
 				else
 				{
 					cout << " Your input: ";
-					dialog = get_with_lim(1, chosen->enemy_list.size);
+					dialog = get_with_lim(1, chosen->enemy_list.get_size());
 					dialog--;
 
 					try
@@ -415,15 +471,102 @@ void player::choose_action(int& step)
 						cin.get();
 					}
 				}
-
 				break;
 			}
-
 			break;
 		}
 		}
 	}
 	}
+}
+
+void player::crate_unboxing(crate* found)
+{
+	if (typeid(*found) == typeid(coins_crate))
+	{
+		coins_crate* adapter = dynamic_cast<coins_crate*>(found);
+		coins += adapter->get_coins();
+	}
+	else if (typeid(*found) == typeid(medkit_crate))
+	{
+		medkit_crate* adapter = dynamic_cast<medkit_crate*>(found);
+		int heal_multiplier = adapter->get_level();
+		switch (heal_multiplier)
+		{
+		case 1:
+		{
+			chosen->health += chosen->max_health * 0.1;
+			break;
+		}
+		case 2:
+		{
+			chosen->health += chosen->max_health * 0.35;
+			break;
+		}
+		case 3:
+		{
+			chosen->health += chosen->max_health * 0.7;
+			break;
+		}
+		}
+		if (chosen->health > chosen->max_health)
+			chosen->health = chosen->max_health;
+	}
+	else if (typeid(*found) == typeid(arsenal_crate))
+	{
+		arsenal_crate* adapter = dynamic_cast<arsenal_crate*>(found);
+		int arsenal_power = adapter->get_level();
+		switch (arsenal_power)
+		{
+		case 1:
+		{
+			chosen->aver_dmg *= 1.1;
+			break;
+		}
+		case 2:
+		{
+			chosen->aver_dmg *= 1.2;
+			break;
+		}
+		case 3:
+		{
+			chosen->aver_dmg *= 1.5;
+			break;
+		}
+		}
+
+	}
+	else if (typeid(*found) == typeid(optics_crate))
+	{
+		optics_crate* adapter = dynamic_cast<optics_crate*>(found);
+		int optics_power = adapter->get_level();
+		switch (optics_power)
+		{
+		case 1:
+		{
+			chosen->crit_chance *= 1.15;
+			chosen->precise = 100 - ((100 - chosen->precise) / 1.1);
+			break;
+		}
+		case 2:
+		{
+			chosen->crit_chance *= 1.5;
+			chosen->precise = 100 - ((100 - chosen->precise) / 1.25);
+			break;
+		}
+		case 3:
+		{
+			chosen->crit_chance *= 2;
+			chosen->precise = 100 - ((100 - chosen->precise) / 1.5);
+			break;
+		}
+		}
+
+		if (chosen->crit_chance > 100.0)
+			chosen->crit_chance = 100.0;
+	}
+
+	return;
 }
 
 
@@ -443,10 +586,11 @@ division::division()
 	pos.y = -1;
 	type = "default type division";
 	defeated = false;
-	health = 100.0;
+	max_health = 100.0;
+	health = max_health;
 	aver_dmg = 20.0;
 	crit_chance = 20.0;
-	precise = 90.0;
+	precise = 80.0;
 	attack_range = 2;
 	move_range = 3;
 	price = 100;
@@ -475,9 +619,9 @@ void division::reach_area_comp(map& pg)
 	return;
 }
 
-void division::move(map& pg, int destX, int destY)
+int division::move(map& pg, int destX, int destY)
 {
-	if (pg.playground[destY][destX] != ' ')
+	if (pg.playground[destY][destX] != ' ' && pg.playground[destY][destX] != '+')
 	{
 		throw(player::err("Cannot move division on this cell!"));
 	}
@@ -487,13 +631,15 @@ void division::move(map& pg, int destX, int destY)
 	}
 	else
 	{
+		int found_drop = (pg.playground[destY][destX] == '+');
+
 		pg.playground[pos.y][pos.x] = ' ';
 		pos.x = destX;
 		pos.y = destY;
 		pg.playground[pos.y][pos.x] = 'D';
-	}
 
-	return;
+		return found_drop;
+	}
 }
 
 void division::killzone_comp(map& pg)
@@ -504,16 +650,14 @@ void division::killzone_comp(map& pg)
 
 void division::refresh_EL()
 {
-	division* current = nullptr;
-	for (int i = 0; i < enemy_list.size; i++)
+	for (int i = 0; i < enemy_list.get_size(); i++)
 	{
-		current = enemy_list[i];
-		if (current->pos.x < kill_zone[0].x || current->pos.y < kill_zone[0].y ||
-			current->pos.x > kill_zone[1].x || current->pos.y > kill_zone[1].y ||
-			current->defeated)
+		if (enemy_list[i]->pos.x < kill_zone[0].x || enemy_list[i]->pos.y < kill_zone[0].y ||
+			enemy_list[i]->pos.x > kill_zone[1].x || enemy_list[i]->pos.y > kill_zone[1].y ||
+			enemy_list[i]->defeated)
 		{
-			enemy_list.rm_elem(current);
-			i = -1;
+			enemy_list.rm_elem(i);
+			i--;
 		}
 	}
 	return;
@@ -524,16 +668,15 @@ void division::update_EL(player** enemies, int enemies_amt)
 	bool skip = false;
 	division* current = nullptr;
 
-
 	for (int i = 0; i < enemies_amt; i++)
 	{
-		for (int j = 0; j < enemies[i]->army.size; j++)
+		for (int j = 0; j < enemies[i]->army.get_size(); j++)
 		{
 			if (enemies[i]->army[j]->pos.x >= kill_zone[0].x && enemies[i]->army[j]->pos.y >= kill_zone[0].y &&
 				enemies[i]->army[j]->pos.x <= kill_zone[1].x && enemies[i]->army[j]->pos.y <= kill_zone[1].y &&
 				!enemies[i]->army[j]->defeated)
 			{
-				for (int k = 0; k < enemy_list.size; k++)
+				for (int k = 0; k < enemy_list.get_size(); k++)
 				{
 					current = enemy_list[k];
 					if (current == enemies[i]->army[j])
@@ -548,7 +691,7 @@ void division::update_EL(player** enemies, int enemies_amt)
 					continue;
 				}
 
-				enemy_list.add_elem(enemies[i]->army[j]);
+				enemy_list.add_elem(&enemies[i]->army[j]);
 			}
 		}
 	}
@@ -561,6 +704,7 @@ void division::attack(int victim_number, map& loc)
 	using std::cout;
 	using std::cin;
 	using std::endl;
+
 	int damage = aver_dmg * 0.9 + rand() % int(aver_dmg * 0.2 + 1);
 	int _event = 1 + rand() % 100;
 	if (_event <= precise)
@@ -574,7 +718,7 @@ void division::attack(int victim_number, map& loc)
 	{
 		target = enemy_list[victim_number];
 	}
-	catch (std::range_error trouble)
+	catch (std::range_error& trouble)
 	{
 		throw (std::range_error(trouble.what()));
 	}
@@ -651,6 +795,8 @@ map::map(int w_init, int l_init, int p_amt)
 		length = mpsize;
 	else
 		length = l_init;
+
+	crate_spawn_timer = 1;
 }
 
 void map::settings()
@@ -705,11 +851,11 @@ void map::settings()
 void map::init()
 {
 	playground = new char* [length];
-	for (int i = 0; i < length; i++)
+	for (int y = 0; y < length; y++)
 	{
-		playground[i] = new char[width];
-		for (int k = 0; k < width; k++)
-			playground[i][k] = ' ';
+		playground[y] = new char[width];
+		for (int x = 0; x < width; x++)
+			playground[y][x] = ' ';
 	}
 	return;
 }
@@ -786,6 +932,89 @@ void map::draw()
 	cout << endl;
 }
 
+void map::refresh()
+{
+	for (int y = 0; y < length; y++)
+	{
+		for (int x = 0; x < width; x++)
+		{
+			playground[y][x] = ' ';
+		}
+	}
+
+	int crate_amt = crates.get_size();
+	for (int i = crate_amt - 1; i >= 0; i--)
+		crates.rm_elem(i);
+
+	return;
+}
+
+void map::crate_spawn_event()
+{
+	if (crate_spawn_timer % 4)
+		crate_spawn_timer++;
+	else
+	{
+		crate* airdrop = nullptr;
+		int type_ID = 0;
+		int drop_x = 0;
+		int drop_y = 0;
+
+		while (true)
+		{
+			type_ID = 1 + rand() % 100;
+			if (type_ID > 90)
+				airdrop = new optics_crate(length, width);
+			else if (type_ID > 80)
+				airdrop = new arsenal_crate(length, width);
+			else if (type_ID > 65)
+				airdrop = new medkit_crate(length, width);
+			else
+				airdrop = new coins_crate(length, width);
+
+			airdrop->get_pos(drop_x, drop_y);
+			if (playground[drop_y][drop_x] == 'D')
+			{
+				delete airdrop;
+				continue;
+			}
+			else if (playground[drop_y][drop_x] == '+')
+			{
+				crate* found = find_crate(drop_x, drop_y);
+				crates.rm_elem(&found);
+			}
+			else if (playground[drop_y][drop_x] == ' ')
+				playground[drop_y][drop_x] = '+';
+
+			crates.add_elem(&airdrop);
+			break;
+		}
+		crate_spawn_timer /= 4;
+	}
+	return;
+}
+
+crate* map::find_crate(int srch_x, int srch_y)
+{
+	crate* found = nullptr;
+	int cmp_x = 0;
+	int cmp_y = 0;
+
+	for (int i = 0; i < crates.get_size(); i++)
+	{
+		crates[i]->get_pos(cmp_x, cmp_y);
+		if (cmp_x == srch_x && cmp_y == srch_y)
+		{
+			found = crates[i];
+			break;
+		}
+	}
+
+	return found;
+}
+
+
+
 void calc_zone(division::position& current, division::position& lcorner, division::position& rcorner, map& loc, int range)
 {
 	if (current.x - range >= 0)
@@ -810,176 +1039,6 @@ void calc_zone(division::position& current, division::position& lcorner, divisio
 
 	return;
 }
-
-
-// Class "list" 
-
-
-
-list::list()
-{
-	head = nullptr;
-	tail = nullptr;
-	current = nullptr;
-	size = 0;
-}
-
-list::list(list& orig)
-{
-	head = new node;
-	head->content = orig.head->content;
-	head->next = nullptr;
-
-	size = orig.size;
-	current = head;
-	orig.current = orig.head;
-
-	for (int i = 0; i < size; i++)
-	{
-		current->next = new node;
-		current = current->next;
-		orig.current = orig.current->next;
-		current->content = orig.current->content;
-		current->next = nullptr;
-	}
-	tail = current;
-	current = nullptr;
-}
-
-list::~list()
-{
-	current = head;
-	while (current != nullptr)
-	{
-		current = current->next;
-		delete head;
-		head = current;
-	}
-}
-
-void list::add_elem(division* which)
-{
-	if (head == nullptr)
-	{
-		head = new node;
-		tail = head;
-	}
-	else
-	{
-		tail->next = new node;
-		tail = tail->next;
-	}
-
-	tail->content = which;
-	tail->next = nullptr;
-	size++;
-	return;
-}
-
-void list::rm_elem(division* which)
-{
-	if (size > 0)
-	{
-		current = head;
-		node* to_rm = head;
-		while (to_rm->content != which)
-		{
-			if (current != to_rm)
-				current = current->next;
-			to_rm = to_rm->next;
-		}
-
-		if (to_rm == head)
-		{
-			if (head->next != nullptr)
-			{
-				head = head->next;
-			}
-			else
-			{
-				head = nullptr;
-			}
-		}
-
-		delete to_rm;
-		size--;
-	}
-	return;
-}
-
-division* list::operator[](int index)
-{
-	current = head;
-	if (index < size)
-	{
-		for (int i = 0; i < index; i++)
-		{
-			current = current->next;
-		}
-		return current->content;
-	}
-	else
-		throw(std::range_error("index is out of range."));
-}
-
-list& list::operator=(const list& orig)
-{
-	if (this != &orig)
-	{
-		current = head;
-		while (current != nullptr)
-		{
-			current = current->next;
-			delete head;
-			head = current;
-		}
-		tail = nullptr;
-
-		head = new node;
-		head->content = orig.head->content;
-		head->next = nullptr;
-		size = orig.size;
-
-		current = head;
-		node* passing = orig.head;
-		for (int i = 0; i < size; i++)
-		{
-			current->next = new node;
-			current = current->next;
-			passing = passing->next;
-			current->content = passing->content;
-			current->next = nullptr;
-		}
-		tail = current;
-		current = nullptr;
-	}
-	return *this;
-}
-
-std::ostream& operator<<(std::ostream& out, list& obj)
-{
-	using std::endl;
-	obj.current = obj.head;
-
-	int acc = 1;
-	if (!obj.size)
-		out << " *there are no units*" << endl;
-	else
-	{
-		for (int i = 0; i < obj.size; i++)
-		{
-			out << " #" << acc << ": ";
-			obj.current->content->short_info();
-			obj.current = obj.current->next;
-			acc++;
-		}
-	}
-
-	return out;
-}
-
-
-
 
 int get_with_lim(int bottom, int top)
 {

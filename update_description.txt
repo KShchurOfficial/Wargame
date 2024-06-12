@@ -1,7 +1,27 @@
--!--!--!--!- Update 1.0.1 -!--!--!--!-
+-!--!--!--!- Update 1.0.2 -!--!--!--!-
 
-1) System of division choosing has improved.
-2) Game settings have added. Now user can set size of battlefield and amount of players (from 2 to 4).
-3) Prototype of economics has added. Now each player receive 1000 coins on the game start.
-These coins player should spend to buy at least one division. Amount of divisions each player can place 
-is limited by their coin amount. At the moment player can grab more coins by destroying enemy divisions.
+1) Game process updated for playing with 3 or 4 players. Now users will play pair matches with each other.
+To win, player should destroy all divisions of enemy. If it is, player receive 1 score point. When all games will
+played, program will show the table of score points of each player and then it will recognize winner.
+
+2) Now players have an ability to equip more divisions while playing the match.
+
+3) Crates with boosts were added. Now there are 4 types of it: 
+	crate with coins (give 50-150 coins)
+	medkit crate (recovers health of division)
+	crate with arsenal improvement (increases average damage of division)
+ 	optics crate (increases divisions chance of doing critical damage and decreases divisions chance of miss)
+All types have unequal chance of spawn:
+	Coins crate - 50%
+	Medkit crate - 25%
+	Arsenal crate - 15%
+	Optics crate - 10%
+Three last types of crates have 3 levels. The higher level of crate, the less chance of spawn and
+the more power of boost it has. 
+
+
+
+
+4) The class "List" has replaced by its more universal version named "Unilist". 
+Now, I can use construction "linked list" for storing not only divisions, but
+also for crates of boost.

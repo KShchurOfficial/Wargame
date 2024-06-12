@@ -5,38 +5,13 @@
 #include <string>
 #include <iostream>
 
+#include "unilist.h"
+#include "crates.h"
+
 class player;
 class map;
 class division;
-class list;
 
-class list
-{
-private:
-	friend player;
-	friend division;
-	struct node
-	{
-		division* content;
-		node* next;
-	};
-	node* head;
-	node* tail;
-	node* current;
-	int size;
-
-public:
-	list();
-	list(list& orig);
-	~list();
-	void add_elem(division* which);
-	void rm_elem(division* which);
-	bool is_empty() { if (!size) return true; }
-
-	list& operator=(const list& orig);
-	division* operator[](int index);
-	friend std::ostream& operator<<(std::ostream& out, list& obj);
-};
 
 
 
@@ -67,20 +42,22 @@ private:
 		int msg() { std::cout << " Earned " << summ << " coins! (" << reason << ")" << std::endl; return summ; }
 	};
 
-	int ord_num;
 	std::string name;
-	list army;
+	Unilist<division*> army;
 	division* chosen;
 
 	map* location;
 
 	player** enemies;
 	int enemies_amt;
+	int side;
+	bool ready;
 	bool defeat;
+	int wins;
 
 	int coins;
 
-	int get_armysize() { return army.size; }
+	int get_armysize() { return army.get_size(); }
 
 public:
 	player(int number);
@@ -91,11 +68,18 @@ public:
 	std::string& show_name() { return name; }
 	division* search_by_pos(int& srch_x, int& srch_y);
 	void set_location(map* addr) { location = addr; }
+	void set_side(int value) { side = value; }
 	void set_EL(player** pool, int poolsize);
 	void choose_action(int& step);
 	void check_other(division* checking);
 	bool is_defeat();
+	bool check_ready() { return ready; }
+	void won() { wins++; };
+	int get_wins() { return wins; }
+	void refresh();
 	void search_alive();
+
+	void crate_unboxing(crate* found);
 };
 
 
@@ -104,6 +88,7 @@ class division
 private:
 	friend map;
 	friend player;
+	friend Unilist<division*>;
 
 	struct position
 	{
@@ -117,8 +102,9 @@ private:
 	bool defeated;
 	position move_limits[2];
 	position kill_zone[2];
-	list enemy_list;
+	Unilist<division*> enemy_list;
 
+	double max_health;
 	double health;
 	double aver_dmg;
 	double crit_chance;
@@ -130,7 +116,7 @@ private:
 
 	void place_division(bool which_side, map& loc);
 	void reach_area_comp(map& pg);
-	void move(map& pg, int destX, int destY);
+	int move(map& pg, int destX, int destY);
 	void killzone_comp(map& pg);
 	void refresh_EL();
 	void update_EL(player** enemies, int enemies_amt);
@@ -141,7 +127,6 @@ public:
 	division();
 	~division() {}
 
-	friend std::ostream& operator<<(std::ostream& out, list& obj);
 	friend std::ostream& operator<<(std::ostream& out, division& div);
 	friend void calc_zone(division::position& current, division::position& lcorner, division::position& rcorner, map& loc, int range);
 	friend bool get_coord(position& inp, map& loc);
@@ -161,6 +146,9 @@ private:
 	int playernum;
 	char** playground;
 
+	Unilist<crate*> crates;
+	int crate_spawn_timer;
+
 	void set_width(int w_init, int playernum = 2);
 	void set_length(int l_init, int playernum = 2);
 
@@ -173,6 +161,9 @@ public:
 	void save_div(division* div);
 	void update(const player& contestant);
 	void draw();
+	void refresh();
+	void crate_spawn_event();
+	crate* find_crate(int srch_x, int srch_y);
 
 	friend void calc_zone(division::position& current, division::position& lcorner, division::position& rcorner, map& loc, int range);
 	friend bool get_coord(division::position& inp, map& loc);

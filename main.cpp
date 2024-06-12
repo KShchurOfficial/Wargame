@@ -55,46 +55,93 @@ int main()
 	{
 		pool[i] = new player(i + 1);
 		pool[i]->set_location(&battlefield);
-		pool[i]->equipment();
-		pool[i]->placement();
 	}
-	for (int i = 0; i < pool_size; i++)
-		pool[i]->set_EL(pool, pool_size);
 
 
 	int turn = 0;
 	bool game_over = false;
-	int step = 1;
-	while (!game_over)
+	for (int i = 0; i < pool_size; i++)
 	{
-		for (int i = 1; i < 3; i++)
+		for (int j = i + 1; j < pool_size; j++)
 		{
-			system("cls");
-			cout << pool[turn]->show_name() << "'s turn." << endl;
-			battlefield.draw();
-			pool[turn]->search_alive();
-			if (pool[turn]->is_defeat())
+			turn = i;
+			while (!game_over)
 			{
-				game_over = true;
-				cout << pool[turn]->show_name() << " eliminated!" << endl;
-				break;
+				if (!pool[turn]->check_ready())
+				{
+					if (turn == i)
+						pool[turn]->set_side(0);
+					else
+						pool[turn]->set_side(1);
+					pool[turn]->equipment();
+					cout << "\"" << pool[turn]->show_name() << "\" has formed an army!" << endl;
+					pool[turn]->placement();
+					pool[turn]->set_EL(pool, pool_size);
+				}
+				else
+				{
+					if (turn == i)
+						battlefield.crate_spawn_event();
+					for (int k = 1; k < 3; k++)
+					{
+						system("cls");
+						cout << pool[turn]->show_name() << "'s turn." << endl;
+						battlefield.draw();
+						pool[turn]->search_alive();
+						if (pool[turn]->is_defeat())
+						{
+							game_over = true;
+							cout << pool[turn]->show_name() << " eliminated!" << endl;
+							cin.get();
+							if (turn == i)
+								pool[j]->won();
+							else
+								pool[i]->won();
+							break;
+						}
+
+						pool[turn]->choose_action(k);
+
+						if (pool[turn]->is_defeat())
+						{
+							game_over = true;
+							cout << pool[turn]->show_name() << " eliminated!" << endl;
+							if (turn == i)
+								pool[j]->won();
+							else
+								pool[i]->won();
+							break;
+						}
+					}
+				}
+
+				if (turn == i)
+					turn = j;
+				else
+					turn = i;
 			}
 
-			pool[turn]->choose_action(i);
-
-			if (pool[turn]->is_defeat())
-			{
-				game_over = true;
-				cout << pool[turn]->show_name() << " eliminated!" << endl;
-				break;
-			}
+			pool[i]->refresh();
+			pool[j]->refresh();
+			battlefield.refresh();
+			game_over = false;
 		}
-
-
-		turn++;
-		if (turn == pool_size)
-			turn = 0;
 	}
+
+	player* winner = nullptr;
+	int max_points = 0;
+	system("cls");
+	for (int i = 0; i < pool_size; i++)
+	{
+		cout << " " << pool[i]->show_name() << ": " << pool[i]->get_wins() << " points" << endl;
+		if (max_points < pool[i]->get_wins())
+		{
+			max_points = pool[i]->get_wins();
+			winner = pool[i];
+		}
+	}
+	cout << endl;
+	cout << winner->show_name() << " won the game!" << endl;
 
 	return 0;
 }
